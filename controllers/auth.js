@@ -4,12 +4,13 @@ const gravatar = require("gravatar");
 const path = require("path");
 const fs = require("fs/promises");
 const Jimp = require("jimp");
+const { nanoid } = require("nanoid");
 
 const { User } = require("../models/user");
 
-const { ctrlWrapper, HttpError } = require("../helpers");
+const { ctrlWrapper, HttpError, sendEmail } = require("../helpers");
 
-const { SECRET_KEY } = process.env;
+const { SECRET_KEY, PROJECT_URL } = process.env;
 
 const avatarDir = path.join(__dirname, "../", "public", "avatars");
 
@@ -21,10 +22,22 @@ const register = async (req, res) => {
     throw new HttpError(409, "Email already in use");
   }
 
+  
   const hashPassword = await bcrypt.hash(password, 10);
+  
+  const verificationCode = nanoid();
+  
   const avatarURL = gravatar.url(email);
 
-  const newUser = await User.create({...req.body, password: hashPassword, avatarURL});
+  const newUser = await User.create({...req.body, password: hashPassword, avatarURL, verificationCode});
+
+  const verifyEmail = {
+    to: email,
+    subject: "Verify email",
+    html: `<a target="_blank" href="${PROJECT_URL}/api/auth/verify/${verificationCode}">Click to verify email</a>`
+  };
+
+  await sendEmail(verifyEmail);
 
   res.status(201).json({
     email: newUser.email,
